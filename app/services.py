@@ -26,8 +26,12 @@ class RAGPipeline:
         """
         import openai
         openai.api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.Embedding.create(input=query, model="text-embedding-3-large")
-        return np.array(response["data"][0]["embedding"], dtype="float32")
+        response = openai.Embedding.create(
+            input=query,
+            model="text-embedding-3-large"
+    )
+    return np.array(response["data"][0]["embedding"], dtype="float32")
+
 
     def get_relevant_context(self, query: str, k: int = 3) -> str:
         """
