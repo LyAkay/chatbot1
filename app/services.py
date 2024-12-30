@@ -5,6 +5,7 @@ import pickle
 import faiss
 import numpy as np
 from dotenv import load_dotenv
+import openai
 
 # Tải biến môi trường
 load_dotenv()
@@ -24,14 +25,12 @@ class RAGPipeline:
         """
         Tạo embedding cho câu hỏi bằng API OpenAI.
         """
-        import openai
         openai.api_key = os.getenv("OPENAI_API_KEY")
         response = openai.Embedding.create(
             input=query,
-            model="text-embedding-3-large"
-    )
-    return np.array(response["data"][0]["embedding"], dtype="float32")
-
+            model="text-embedding-ada-002"  # Sử dụng mô hình hợp lệ
+        )
+        return np.array(response["data"][0]["embedding"], dtype="float32")
 
     def get_relevant_context(self, query: str, k: int = 3) -> str:
         """
@@ -46,7 +45,6 @@ class RAGPipeline:
         """
         Gửi câu hỏi đến OpenAI để nhận câu trả lời.
         """
-        import openai
         openai.api_key = os.getenv("OPENAI_API_KEY")
         context = self.get_relevant_context(query)
         prompt = f"""
@@ -56,7 +54,7 @@ class RAGPipeline:
         Câu hỏi: {query}
         """
         response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
+            model="gpt-4",  # Sử dụng mô hình hợp lệ, ví dụ: "gpt-4" hoặc "gpt-3.5-turbo"
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=500
