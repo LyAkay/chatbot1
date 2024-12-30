@@ -11,6 +11,13 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 rag = RAGPipeline()
 
+@app.get("/")
+async def root():
+    """
+    Endpoint gốc để kiểm tra ứng dụng hoạt động.
+    """
+    return {"message": "Ứng dụng Chatbot hoạt động! Truy cập /chat/ để gửi câu hỏi."}
+
 @app.post("/chat/")
 async def chat(request: Request):
     """
@@ -19,14 +26,28 @@ async def chat(request: Request):
     try:
         # Log toàn bộ body nhận được
         body = await request.body()
-        logger.info(f"Received raw body: {body}")  # Ghi log nội dung thô
-        logger.info(f"Decoded body: {body.decode('utf-8')}")  # Ghi log nội dung JSON
+        try:
+            decoded_body = body.decode('utf-8')
+            logger.info(f"Received raw body: {decoded_body}")  # Ghi log nội dung JSON
+        except Exception as decode_error:
+            logger.error(f"Error decoding body: {decode_error}")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid encoding. Ensure the request body is UTF-8 encoded."
+            )
 
         # Chuyển body thành JSON
-        data = await request.json()
-        logger.info(f"Parsed JSON: {data}")  # Ghi log dữ liệu JSON đã phân tích
+        try:
+            data = await request.json()
+            logger.info(f"Parsed JSON: {data}")  # Ghi log dữ liệu JSON đã phân tích
+        except Exception as json_error:
+            logger.error(f"Error parsing JSON: {json_error}")
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid JSON format: {json_error}"
+            )
 
-        # Kiểm tra nếu 'query' bị thiếu hoặc trống
+        # Kiểm tra nếu 'query' bị thiếu hoặc rỗng
         query = data.get("query", "")
         if not query:
             logger.error("Field 'query' is missing or empty.")
@@ -44,8 +65,22 @@ async def chat(request: Request):
 
         return {"query": query, "answer": answer}
 
+    except HTTPException as he:
+        # Log chi tiết lỗi HTTP
+        logger.error(f"HTTPException: {he.detail}")
+        raise he
     except Exception as e:
         # Log chi tiết lỗi
         logger.error(f"Error processing /chat/: {e}")
         return JSONResponse({"error": f"Internal server error: {str(e)}"}, status_code=500)
 
+@app.get("/download-responses/")
+async def download_responses():
+    """
+    Endpoint để tải file CSV chứa các phản hồi.
+    """
+    try:
+        return FileResponse(path="app/responses.csv", filename="responses.csv", media_type="text/csv")
+    except Exception as e:
+        logger.error(f"Error processing /download-responses/: {e}")
+        return JSONResponse({"error": f"Internal server error: {str(e)}"}, status_code=500)
