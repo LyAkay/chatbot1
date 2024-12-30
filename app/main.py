@@ -17,49 +17,87 @@ CSV_FILE = "app/responses.csv"
 
 class RAGPipeline:
     def __init__(self):
-        self.index = faiss.read_index(FAISS_INDEX)
-        with open(TEXTS_FILE, "rb") as f:
-            self.texts = pickle.load(f)
+        try:
+            self.index = faiss.read_index('faiss_index.bin')
+            with open('chunked_texts.pkl', 'rb') as f:
+                self.texts = pickle.load(f)
+
+            self.model_manager = ModelManager()
+            self.openai_api_key = os.getenv("OPENAI_API_KEY")
+
+            self.prompt_template = """"Trả lời câu hỏi một cách đầy đủ, súc tích và ngắn gọn bằng Tiếng Việt dựa trên (các) đoạn văn bản sau:
+            {context}
+
+            Câu hỏi: {question}
+
+            Nếu không thể trả lời câu hỏi dựa trên ngữ cảnh, vui lòng trả lời một cách tự nhiên dưới dạng AI đàm thoại. Vui lòng trả lời tất cả các câu hỏi bằng Tiếng Việt.
+
+            """
+            self.chat_history = deque(maxlen=MAX_HISTORY_LENGTH)
+            self.full_chat_history = [] # Lưu trữ toàn bộ lịch sử hội thoại
+            logging.info("RAG Pipeline initialized successfully")
+
+        except Exception as e:
+            logging.error(f"Error initializing RAG Pipeline: {str(e)}")
+            raise
 
     def get_query_embedding(self, query: str) -> np.ndarray:
-        """
-        Tạo embedding cho câu hỏi bằng API OpenAI.
-        """
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.Embedding.create(
-            model="text-embedding-3-large",  # Mô hình Embedding chính thức từ OpenAI
-            input=query
-        )
-        return np.array(response["data"][0]["embedding"], dtype="float32")
+        """Tạo embedding cho query sử dụng OpenAI API."""
+        if not self.model_manager.openai_client:
+            raise Exception("OpenAI API key not found.")
+        try:
+            response = self.model_manager.openai_client.embeddings.create(
+                input=query,
+                model="text-embedding-3-large"
+            )
+            return np.array(response.data[0].embedding).astype('float32')
+        except Exception as e:
+            logging.error(f"Error creating query embedding: {str(e)}")
+            raise
 
     def get_relevant_context(self, query: str, k: int = 3) -> str:
-        """
-        Lấy ngữ cảnh liên quan từ FAISS index.
-        """
-        query_embedding = self.get_query_embedding(query)
-        distances, indices = self.index.search(np.array([query_embedding]), k)
-        contexts = [self.texts[idx] for idx in indices[0]]
-        return "\n\n".join(contexts)
+        """Lấy context liên quan từ index."""
+        try:
+            query_embedding = self.get_query_embedding(query)
+            D, I = self.index.search(np.array([query_embedding]), k)
+            contexts = [self.texts[i] for i in I[0]]
+            unique_contexts = []
+            seen_contexts = set()
+            for c in contexts:
+                if c not in seen_contexts:
+                    unique_contexts.append(c)
+                    seen_contexts.add(c)
+            context = "\n\n".join(unique_contexts)
+            return context
+        except Exception as e:
+            logging.error(f"Error retrieving context: {str(e)}")
+            raise
 
     def get_answer(self, query: str) -> str:
-        """
-        Gửi câu hỏi đến OpenAI để nhận câu trả lời.
-        """
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        context = self.get_relevant_context(query)
-        prompt = f"""
-        Trả lời câu hỏi sau dựa trên ngữ cảnh:
-        {context}
+        """Xử lý câu hỏi và trả về câu trả lời."""
+        try:
+            # Lấy ngữ cảnh liên quan
+            context = self.get_relevant_context(query)
 
-        Câu hỏi: {query}
-        """
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",  # Hoặc "gpt-4" nếu cần
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=500
-        )
-        return response.choices[0].message.content.strip()
+            # Không đưa lịch sử trò chuyện vào prompt
+            prompt = self.prompt_template.format(context=context, question=query)
+
+            # Sử dụng model OpenAI
+            answer = self.model_manager.call_openai_model(prompt)
+            self.update_chat_history(query, answer)
+            return answer
+
+        except Exception as e:
+            logging.error(f"Error processing query: {str(e)}")
+            return f"Lỗi: {str(e)}"
+
+    def update_chat_history(self, query: str, answer: str):
+        """Cập nhật lịch sử trò chuyện."""
+        self.chat_history.append({"sender": "User", "text": query})
+        self.chat_history.append({"sender": "Bot", "text": answer})
+        # Lưu trữ riêng toàn bộ lịch sử
+        self.full_chat_history.append({"sender": "User", "text": query})
+        self.full_chat_history.append({"sender": "Bot", "text": answer})
 
 def log_response_to_csv(question: str, answer: str, context: str, reviewed=False, rating=None, comments=None):
     """
