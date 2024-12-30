@@ -1,0 +1,14 @@
+fastapi>=0.95.0              # Framework để tạo REST API
+uvicorn[standard]>=0.21.0    # Server để chạy ứng dụng FastAPI
+python-dotenv>=1.0.0         # Quản lý biến môi trường từ file .env
+faiss-cpu>=1.7.0             # Tìm kiếm vector nhúng
+numpy>=1.21.0                # Xử lý vector và tính toán
+openai>=0.27.0               # Kết nối API OpenAI
+requests>=2.26.0             # Thư viện HTTP để gọi API (nếu cần)
+#PyPDF2>=3.0.0                # (Tùy chọn) Xử lý file PDF
+
+# Các thư viện nâng cao, chỉ thêm khi mở rộng tính năng:
+#langchain>=0.0.200           # (Tùy chọn) Xây dựng pipeline LLM
+#transformers>=4.0.0          # (Tùy chọn) Sử dụng mô hình Hugging Face
+#sentence-transformers>=2.2.0 # (Tùy chọn) Nhúng câu cho các tác vụ nâng cao
+pandas>=1.3.0                # (Tùy chọn) Xử lý CSV dễ dàng
