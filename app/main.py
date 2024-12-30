@@ -11,13 +11,6 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 rag = RAGPipeline()
 
-@app.get("/")
-async def root():
-    """
-    Endpoint gốc để kiểm tra ứng dụng hoạt động.
-    """
-    return {"message": "Ứng dụng Chatbot hoạt động! Truy cập /chat/ để gửi câu hỏi."}
-
 @app.post("/chat/")
 async def chat(request: Request):
     """
@@ -26,13 +19,15 @@ async def chat(request: Request):
     try:
         # Log toàn bộ body nhận được
         body = await request.body()
-        logger.info(f"Received body: {body.decode('utf-8')}")  # Ghi log nội dung JSON
+        logger.info(f"Received raw body: {body}")  # Ghi log nội dung thô
+        logger.info(f"Decoded body: {body.decode('utf-8')}")  # Ghi log nội dung JSON
 
         # Chuyển body thành JSON
         data = await request.json()
-        query = data.get("query", "")
+        logger.info(f"Parsed JSON: {data}")  # Ghi log dữ liệu JSON đã phân tích
 
-        # Kiểm tra nếu 'query' không có hoặc rỗng
+        # Kiểm tra nếu 'query' bị thiếu hoặc trống
+        query = data.get("query", "")
         if not query:
             logger.error("Field 'query' is missing or empty.")
             raise HTTPException(
@@ -54,13 +49,3 @@ async def chat(request: Request):
         logger.error(f"Error processing /chat/: {e}")
         return JSONResponse({"error": f"Internal server error: {str(e)}"}, status_code=500)
 
-@app.get("/download-responses/")
-async def download_responses():
-    """
-    Endpoint để tải file CSV chứa các phản hồi.
-    """
-    try:
-        return FileResponse(path="app/responses.csv", filename="responses.csv", media_type="text/csv")
-    except Exception as e:
-        logger.error(f"Error processing /download-responses/: {e}")
-        return JSONResponse({"error": f"Internal server error: {str(e)}"}, status_code=500)
