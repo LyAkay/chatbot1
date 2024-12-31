@@ -1,19 +1,25 @@
 FROM python:3.10-slim AS builder
 
-WORKDIR /app
+# Tạo user mới
+RUN useradd -m myuser
+USER myuser
+WORKDIR /home/myuser/app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app/ /app/app/
-COPY .env /app/.env
-COPY app/models /app/models
+COPY app/ /home/myuser/app/app/
+COPY .env /home/myuser/app/.env
+COPY app/models /home/myuser/app/models
 
 # Multi-stage build: copy only necessary files to a new image
 FROM python:3.10-slim
 
-WORKDIR /app
+# Tạo user mới trong image cuối cùng
+RUN useradd -m myuser
+USER myuser
+WORKDIR /home/myuser/app
 
-COPY --from=builder /app /app
+COPY --from=builder /home/myuser/app /home/myuser/app
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
