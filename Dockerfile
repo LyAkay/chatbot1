@@ -1,14 +1,11 @@
-# Sử dụng Python slim để giảm kích thước container
-FROM python:3.9-slim
+FROM python:3.10-slim
 
-# Đặt thư mục làm việc
 WORKDIR /app
 
-# Sao chép toàn bộ mã nguồn vào container
-COPY . /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# Cài đặt thư viện Python
-RUN pip install --no-cache-dir -r requirements.txt
+COPY app/ .
+COPY .env .
 
-# Chạy ứng dụng với Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
