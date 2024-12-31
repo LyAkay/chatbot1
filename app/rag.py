@@ -33,6 +33,29 @@ class CacheManager:
         }
         self.save_cache()
 
+class ResponseLogger:
+    def __init__(self, log_file: str = "responses.csv"):
+        self.log_file = log_file
+        self._init_log_file()
+    
+    def _init_log_file(self):
+        # Tạo file nếu chưa tồn tại
+        if not os.path.exists(self.log_file):
+            with open(self.log_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(['timestamp', 'query', 'response', 'source', 'response_time'])
+    
+    def log_response(self, query: str, response: str, source: str, response_time: float):
+        with open(self.log_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                datetime.now().isoformat(),
+                query,
+                response,
+                source,
+                f"{response_time:.2f}"
+            ])
+
 class RAGSystem:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -61,12 +84,17 @@ class RAGSystem:
         return "\n\n".join(dict.fromkeys(contexts))
 
     def get_answer(self, query: str) -> Dict:
+        start_time = datetime.now()
+        
         # Kiểm tra cache
         cached = self.cache.get(query)
         if cached:
+            response_time = (datetime.now() - start_time).total_seconds()
+            self.logger.log_response(query, cached['response'], 'cache', response_time)
             return {
                 'response': cached['response'],
-                'source': 'cache'
+                'source': 'cache',
+                'response_time': response_time
             }
 
         try:
@@ -86,12 +114,18 @@ class RAGSystem:
             )
 
             answer = response.choices[0].message.content
+            response_time = (datetime.now() - start_time).total_seconds()
+            
             self.cache.add(query, answer)
+            self.logger.log_response(query, answer, 'api', response_time)
             
             return {
                 'response': answer,
-                'source': 'api'
+                'source': 'api',
+                'response_time': response_time
             }
 
         except Exception as e:
+            response_time = (datetime.now() - start_time).total_seconds()
+            self.logger.log_response(query, str(e), 'error', response_time)
             raise Exception(f"Error generating response: {str(e)}")
