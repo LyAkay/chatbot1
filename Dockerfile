@@ -1,21 +1,22 @@
 FROM python:3.10-slim
 
-# Cài đặt các công cụ hệ thống cần thiết
+# Cài đặt công cụ cần thiết
 RUN apt-get update && apt-get install -y \
     build-essential \
-    wget \
     swig \
+    wget \
     libopenblas-dev \
     libomp-dev
 
-# Cập nhật pip
-RUN pip install --no-cache-dir --upgrade pip
+# Cập nhật pip và cài đặt setuptools, wheel
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Thiết lập thư mục làm việc
 WORKDIR /app
 
-# Sao chép và cài đặt thư viện từ requirements.txt
+# Sao chép tệp yêu cầu và cài đặt các thư viện
 COPY requirements.txt .
+COPY pyproject.toml .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Sao chép mã nguồn và mô hình vào container
