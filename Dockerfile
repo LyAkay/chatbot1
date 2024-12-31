@@ -3,14 +3,18 @@ FROM python:3.10-slim
 # Thiết lập thư mục làm việc
 WORKDIR /app
 
-# Sao chép file yêu cầu và cài đặt thư viện
+# Sao chép tệp yêu cầu và cài đặt thư viện
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Sao chép mã nguồn vào container
+# Sao chép mã nguồn và mô hình vào container
 COPY app/ /app/app/
 COPY .env /app/.env
 COPY app/models /app/models
+COPY logs /app/logs
 
-# Khởi chạy ứng dụng
+# Thiết lập cổng mặc định
+EXPOSE 8000
+
+# Chạy ứng dụng
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
