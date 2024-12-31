@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ /app/app/
-COPY .env.example /app/.env
+COPY .env /app/.env
 COPY app/models /app/models
 
 # Multi-stage build: copy only necessary files to a new image
