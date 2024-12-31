@@ -1,0 +1,17 @@
+# Bỏ qua tệp .env chứa API keys hoặc thông tin nhạy cảm
+.env
+
+# Bỏ qua thư mục logs (lưu trữ log runtime không cần commit)
+logs/
+
+# Bỏ qua thư mục models (nếu các tệp này lớn hoặc được tạo tự động)
+app/models/
+
+# Bỏ qua cache hoặc các tệp tạm thời
+*.pyc
+__pycache__/
+
+# Bỏ qua các tệp Docker build không cần thiết
+*.log
+*.pid
+*.tar
