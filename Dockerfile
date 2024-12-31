@@ -12,6 +12,9 @@ COPY app/ /home/myuser/app/app/
 COPY .env /home/myuser/app/.env
 COPY app/models /home/myuser/app/models
 
+# Thêm dòng này để cập nhật PATH
+ENV PATH="/home/myuser/.local/bin:${PATH}"
+
 # Multi-stage build: copy only necessary files to a new image
 FROM python:3.10-slim
 
