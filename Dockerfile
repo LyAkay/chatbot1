@@ -1,7 +1,10 @@
-FROM python:3.10-slim
+FROM python:3.10
 
 # Thiết lập thư mục làm việc
 WORKDIR /app
+
+# Cập nhật pip và cài đặt các thư viện cần thiết
+RUN pip install --no-cache-dir --upgrade pip
 
 # Sao chép tệp yêu cầu và cài đặt thư viện
 COPY requirements.txt .
