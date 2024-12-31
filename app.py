@@ -5,8 +5,8 @@ import pickle
 import numpy as np
 import openai
 import faiss
-from dotenv import load_dotenv
 from flask import Flask, request, jsonify
+from dotenv import load_dotenv
 
 # Cấu hình logging
 log_dir = "logs"
@@ -41,8 +41,8 @@ if not os.path.exists(history_file):
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Khởi tạo FastAPI
-app = FastAPI()
+# Khởi tạo Flask
+app = Flask(__name__)
 
 # Giới hạn lịch sử trò chuyện
 MAX_HISTORY_LENGTH = 10
@@ -82,7 +82,7 @@ class ModelManager:
             return response_content
         except Exception as e:
             logging.error(f"OpenAI API error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Error from OpenAI API.")
+            return "Error: Unable to fetch response from OpenAI."
 
 # RAG Pipeline
 class RAGPipeline:
@@ -105,7 +105,7 @@ class RAGPipeline:
 
         except Exception as e:
             logging.error(f"Error initializing RAG Pipeline: {str(e)}")
-            raise HTTPException(status_code=500, detail="Error initializing RAG Pipeline.")
+            raise RuntimeError("Error initializing RAG Pipeline.")
 
     def get_query_embedding(self, query: str) -> np.ndarray:
         """Tạo embedding cho query sử dụng OpenAI API."""
@@ -130,44 +130,31 @@ class RAGPipeline:
 # Khởi tạo RAG pipeline
 rag_pipeline = RAGPipeline()
 
-# Endpoint FastAPI
+# Endpoint Flask
 @app.route('/answer', methods=['POST'])
 def get_answer():
     data = request.get_json()
     query = data.get('query')
-    selected_menu = data.get('selected_menu')
-    chat_history = data.get('chat_history', [])
 
-    if not query or not selected_menu:
-        return jsonify({"error": "Missing 'query' or 'selected_menu' in request."}), 400
+    if not query:
+        return jsonify({"error": "Missing 'query' in request."}), 400
 
-    vectors = faiss_indices.get(selected_menu)
-    if not vectors:
-        return jsonify({"error": f"No FAISS index found for menu '{selected_menu}'."}), 400
+    try:
+        # Lấy câu trả lời
+        answer = rag_pipeline.get_answer(query)
 
-    if chat_history:
-        previous_queries = ' '.join([f"User: {q}\nChatbot: {a}" for q, a in chat_history])
-    else:
-        previous_queries = ""
+        # Lưu lịch sử
+        with open(history_file, "r+") as f:
+            history = json.load(f)
+            history.append({"user": query, "bot": answer})
+            f.seek(0)
+            json.dump(history, f)
 
-    # Check cache first
-    cache_file = f"cache/{selected_menu.lower()}_cache.json"
-    cached_answer = check_prompt_caching(query, cache_file)
-    if cached_answer:
-        logging.info(f"Returning cached answer for query: {query}")
-        return jsonify({"answer": cached_answer})
+        return jsonify({"query": query, "answer": answer})
 
-    # Generate answer
-    answer = generate_answer_with_rag(query, vectors, previous_queries, max_tokens=150)
-
-    # Save to cache
-    cache = load_json(cache_file)
-    query_hash = hash_prompt(query)
-    cache[query_hash] = answer
-    save_json(cache_file, cache)
-
-    response = {"answer": answer}
-    return jsonify(response)
+    except Exception as e:
+        logging.error(f"Unexpected error: {str(e)}")
+        return jsonify({"error": "Unexpected error occurred."}), 500
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
