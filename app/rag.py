@@ -39,6 +39,26 @@ class RAGSystem:
         self._load_resources()
 
     # ... (các phương thức khác giữ nguyên)
+    def _load_resources(self):
+        try:
+            self.index = faiss.read_index('models/faiss_index.bin')
+            with open('models/chunked_texts.pkl', 'rb') as f:
+                self.texts = pickle.load(f)
+        except FileNotFoundError as e:
+            raise Exception(f"Resource files not found: {str(e)}")
+
+    def get_embedding(self, text: str) -> np.ndarray:
+        response = self.client.embeddings.create(
+            input=text,
+            model="text-embedding-3-large"
+        )
+        return np.array(response.data[0].embedding, dtype='float32')
+
+    def get_context(self, query: str, k: int = 3) -> str:
+        query_vector = self.get_embedding(query)
+        D, I = self.index.search(query_vector.reshape(1, -1), k)
+        contexts = [self.texts[i] for i in I[0] if i < len(self.texts)]
+        return "\n\n".join(dict.fromkeys(contexts))
 
     def get_answer(self, query: str) -> Dict:
         start_time = datetime.now()
