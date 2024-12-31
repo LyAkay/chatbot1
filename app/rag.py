@@ -1,23 +1,19 @@
 import os
-import logging
 import pickle
 import numpy as np
 import faiss
 from openai import OpenAI
+import json
 from datetime import datetime
 from pathlib import Path
-from dotenv import load_dotenv
+import csv
+import logging
 
-# Cấu hình logging
-log_file = "logs/chatbot.log"
-if not os.path.exists("logs"):
-    os.makedirs("logs")
-
-logging.basicConfig(
-    filename=log_file,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler("chatbot.log"),
+                              logging.StreamHandler()])
+logger = logging.getLogger(__name__)
 
 class CacheManager:
     def __init__(self, cache_file: str = "cache.json"):
@@ -25,137 +21,113 @@ class CacheManager:
         self._load_cache()
 
     def _load_cache(self):
-        """Tải cache từ file."""
         try:
-            if self.cache_file.exists():
-                with self.cache_file.open("r") as f:
-                    self.cache = json.load(f)
-            else:
-                self.cache = {}
-        except Exception as e:
-            logging.error(f"Error loading cache: {str(e)}")
+            with self.cache_file.open('r') as f:
+                self.cache = json.load(f)
+        except FileNotFoundError:
             self.cache = {}
 
     def save_cache(self):
-        """Lưu cache vào file."""
-        try:
-            with self.cache_file.open("w") as f:
-                json.dump(self.cache, f, indent=4)
-        except Exception as e:
-            logging.error(f"Error saving cache: {str(e)}")
+        with self.cache_file.open('w') as f:
+            json.dump(self.cache, f, indent=4)
 
-    def get(self, query: str):
-        """Lấy câu trả lời từ cache."""
+    def get(self, query: str) -> Optional[str]:
         return self.cache.get(query.lower().strip())
 
     def add(self, query: str, response: str):
-        """Thêm câu trả lời mới vào cache."""
         self.cache[query.lower().strip()] = {
-            "response": response,
-            "timestamp": datetime.now().isoformat()
+            'response': response,
+            'timestamp': datetime.now().isoformat()
         }
         self.save_cache()
 
-class RAGPipeline:
-    def __init__(self):
-        # Tải biến môi trường
-        load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
-        
+class RAGSystem:
+    def __init__(self,
+                 index_file: str = "app/models/faiss_index.bin",
+                 texts_file: str = "app/models/chunked_texts.pkl",
+                 cache_file: str = "cache.json"):
+        self.index_file = Path(index_file)
+        self.texts_file = Path(texts_file)
+        self.cache_file = Path(cache_file)
         self.client = self._init_openai_client()
-        self.cache = CacheManager()
-        self.index = self._load_faiss_index("app/models/faiss_index.bin")
-        self.texts = self._load_chunked_texts("app/models/chunked_texts.pkl")
+        self.cache = CacheManager(cache_file=str(self.cache_file))
+        self._load_resources()
 
-        self.prompt_template = """
-        Trả lời câu hỏi một cách đầy đủ, súc tích và ngắn gọn bằng Tiếng Việt dựa trên đoạn văn bản sau:
-        {context}
+    def _init_openai_client(self) -> OpenAI:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable not set.")
+        return OpenAI(api_key=api_key)
 
-        Câu hỏi: {question}
-
-        Nếu không thể trả lời câu hỏi dựa trên ngữ cảnh, vui lòng trả lời: "Tôi không tìm thấy thông tin về vấn đề này trong dữ liệu."
-        """
-        logging.info("RAGPipeline initialized successfully.")
-
-    def _init_openai_client(self):
-        """Khởi tạo OpenAI client."""
+    def _load_resources(self):
         try:
-            return OpenAI(api_key=self.api_key)
-        except Exception as e:
-            logging.error(f"Error initializing OpenAI client: {str(e)}")
-            raise
-
-    def _load_faiss_index(self, index_file: str):
-        """Tải FAISS index từ file."""
-        try:
-            return faiss.read_index(index_file)
-        except Exception as e:
-            logging.error(f"Error loading FAISS index: {str(e)}")
-            raise
-
-    def _load_chunked_texts(self, texts_file: str):
-        """Tải các đoạn văn bản chunked từ file."""
-        try:
-            with open(texts_file, "rb") as f:
-                return pickle.load(f)
-        except Exception as e:
-            logging.error(f"Error loading chunked texts: {str(e)}")
-            raise
+            self.index = faiss.read_index(str(self.index_file))
+            with self.texts_file.open('rb') as f:
+                self.texts = pickle.load(f)
+        except FileNotFoundError as e:
+            raise Exception(f"Resource files not found: {e}")
 
     def get_embedding(self, text: str) -> np.ndarray:
-        """Tạo embedding cho đoạn văn bản."""
         if not text:
             raise ValueError("Input text cannot be empty.")
-        try:
-            response = self.client.embeddings.create(
-                input=text,
-                model="text-embedding-3-large"
-            )
-            return np.array(response.data[0].embedding).astype("float32")
-        except Exception as e:
-            logging.error(f"Error generating embedding: {str(e)}")
-            raise
 
-    def get_context(self, query: str, k: int = 3):
-        """Lấy các đoạn văn bản liên quan từ FAISS index."""
-        try:
-            query_embedding = self.get_embedding(query)
-            distances, indices = self.index.search(np.array([query_embedding]), k)
-            contexts = [self.texts[i] for i in indices[0] if i < len(self.texts)]
-            return "\n\n".join(contexts)
-        except Exception as e:
-            logging.error(f"Error retrieving context: {str(e)}")
-            raise
+        response = self.client.embeddings.create(
+            input=text,
+            model="text-embedding-ada-002"
+        )
+        return np.array(response.data[0].embedding, dtype='float32')
 
-    def get_answer(self, query: str) -> dict:
-        """Tạo câu trả lời cho câu hỏi dựa trên ngữ cảnh và cache."""
-        try:
-            # Kiểm tra cache
-            cached_response = self.cache.get(query)
-            if cached_response:
-                logging.info(f"Cache hit for query: {query}")
-                return cached_response["response"]
+    def get_context(self, query: str, k: int = 3) -> str:
+        query_vector = self.get_embedding(query)
+        D, I = self.index.search(query_vector.reshape(1, -1), k)
+        contexts = [self.texts[i] for i in I[0] if i < len(self.texts)]
+        return "\n\n".join(dict.fromkeys(contexts))
 
-            # Lấy ngữ cảnh
+    def get_answer(self, query: str) -> Dict[str, str | float]:
+        start_time = datetime.now()
+
+        cached = self.cache.get(query)
+        if cached:
+            response_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Response from cache: {query} - {cached['response']} - {response_time:.2f}s")
+            return {
+                'response': cached['response'],
+                'source': 'cache',
+                'response_time': response_time
+            }
+
+        try:
             context = self.get_context(query)
+            prompt = f"""Provide a comprehensive, concise, and brief answer in Vietnamese based on the following text:
+            {context}
 
-            # Chuẩn bị prompt
-            prompt = self.prompt_template.format(context=context, question=query)
+            Question: {query}
 
-            # Gọi OpenAI API để lấy câu trả lời
+            If the question cannot be answered based on the context, please reply: "Tôi không tìm thấy thông tin về vấn đề này trong dữ liệu."
+            """
+
             response = self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=500
+                temperature=0.3
             )
 
             answer = response.choices[0].message.content
+            response_time = (datetime.now() - start_time).total_seconds()
+
             self.cache.add(query, answer)
-            logging.info(f"Generated answer for query: {query}")
-            return answer
+            with open('responses.csv', 'a', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow([query, answer, response_time])
+            logger.info(f"Response from API: {query} - {answer} - {response_time:.2f}s")
+
+            return {
+                'response': answer,
+                'source': 'api',
+                'response_time': response_time
+            }
+
         except Exception as e:
-            logging.error(f"Error generating answer: {str(e)}")
+            response_time = (datetime.now() - start_time).total_seconds()
+            logger.error(f"Error generating response: {e} - {response_time:.2f}s")
             raise
