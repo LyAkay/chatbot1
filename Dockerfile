@@ -5,10 +5,11 @@ RUN useradd -m myuser
 USER myuser
 WORKDIR /home/myuser/app
 
+# Cài đặt thư viện Python và đảm bảo uvicorn nằm trong PATH
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Thêm /home/myuser/.local/bin vào PATH
+# Thêm thư mục .local/bin vào PATH
 ENV PATH="/home/myuser/.local/bin:${PATH}"
 
 COPY app/ /home/myuser/app/app/
