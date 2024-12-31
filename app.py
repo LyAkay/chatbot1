@@ -5,8 +5,8 @@ import pickle
 import numpy as np
 import openai
 import faiss
-from fastapi import FastAPI, HTTPException
 from dotenv import load_dotenv
+from flask import Flask, request, jsonify
 
 # Cấu hình logging
 log_dir = "logs"
@@ -131,21 +131,44 @@ class RAGPipeline:
 rag_pipeline = RAGPipeline()
 
 # Endpoint FastAPI
-@app.post("/answer")
-def answer(query: str):
-    try:
-        answer = rag_pipeline.get_answer(query)
+@app.route('/answer', methods=['POST'])
+def get_answer():
+    data = request.get_json()
+    query = data.get('query')
+    selected_menu = data.get('selected_menu')
+    chat_history = data.get('chat_history', [])
 
-        # Lưu lịch sử trò chuyện
-        with open(history_file, "r+") as f:
-            history = json.load(f)
-            history.append({"user": query, "bot": answer})
-            f.seek(0)
-            json.dump(history, f)
+    if not query or not selected_menu:
+        return jsonify({"error": "Missing 'query' or 'selected_menu' in request."}), 400
 
-        return {"query": query, "answer": answer}
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        logging.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Unexpected error occurred.")
+    vectors = faiss_indices.get(selected_menu)
+    if not vectors:
+        return jsonify({"error": f"No FAISS index found for menu '{selected_menu}'."}), 400
+
+    if chat_history:
+        previous_queries = ' '.join([f"User: {q}\nChatbot: {a}" for q, a in chat_history])
+    else:
+        previous_queries = ""
+
+    # Check cache first
+    cache_file = f"cache/{selected_menu.lower()}_cache.json"
+    cached_answer = check_prompt_caching(query, cache_file)
+    if cached_answer:
+        logging.info(f"Returning cached answer for query: {query}")
+        return jsonify({"answer": cached_answer})
+
+    # Generate answer
+    answer = generate_answer_with_rag(query, vectors, previous_queries, max_tokens=150)
+
+    # Save to cache
+    cache = load_json(cache_file)
+    query_hash = hash_prompt(query)
+    cache[query_hash] = answer
+    save_json(cache_file, cache)
+
+    response = {"answer": answer}
+    return jsonify(response)
+
+if __name__ == '__main__':
+    port = int(os.getenv("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
