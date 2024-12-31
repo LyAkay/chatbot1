@@ -1,17 +1,19 @@
 FROM python:3.10-slim
 
-# Cài đặt các công cụ cần thiết để build thư viện
+# Cài đặt các công cụ cần thiết
 RUN apt-get update && apt-get install -y \
     build-essential \
-    gfortran \
-    wget \
     swig \
+    wget \
     libopenblas-dev \
     libomp-dev \
     python3-dev
 
-# Cập nhật pip và các công cụ build cần thiết
+# Cập nhật pip và cài đặt numpy, setuptools, wheel
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel numpy
+
+# Cài đặt faiss-cpu từ pre-built wheel
+RUN pip install --no-cache-dir https://github.com/facebookresearch/faiss/releases/download/v1.7.2/faiss_cpu-1.7.2-cp310-cp310-manylinux2014_x86_64.whl
 
 # Thiết lập thư mục làm việc
 WORKDIR /app
