@@ -1,12 +1,20 @@
-FROM python:3.10
+FROM python:3.10-slim
+
+# Cài đặt các công cụ hệ thống cần thiết
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    wget \
+    swig \
+    libopenblas-dev \
+    libomp-dev
+
+# Cập nhật pip
+RUN pip install --no-cache-dir --upgrade pip
 
 # Thiết lập thư mục làm việc
 WORKDIR /app
 
-# Cập nhật pip và cài đặt các thư viện cần thiết
-RUN pip install --no-cache-dir --upgrade pip
-
-# Sao chép tệp yêu cầu và cài đặt thư viện
+# Sao chép và cài đặt thư viện từ requirements.txt
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
