@@ -162,43 +162,58 @@ def home():
 @app.route('/answer', methods=['POST'])
 def answer():
     try:
-        print("Endpoint '/answer' hit")
         logging.info("Endpoint '/answer' hit")
-        data = request.get_json()
-        print(f"Received data: {data}")
-        logging.info(f"Received data: {data}")
+        
+        # Log raw request data
+        raw_data = request.get_data()
+        logging.info(f"Raw request data: {raw_data}")
+        
+        # Verify JSON parsing
+        try:
+            data = request.get_json()
+            logging.info(f"Parsed JSON data: {data}")
+        except Exception as e:
+            logging.error(f"JSON parsing error: {e}")
+            return jsonify({"error": f"Invalid JSON format: {str(e)}"}), 400
+            
+        # Check for query parameter
         query = data.get('query')
         if not query:
-            print("Missing 'query' parameter in request.")
-            logging.warning("Missing 'query' parameter in request.")
-            return jsonify({"error": "Missing 'query' parameter."}), 400
-
-        print(f"Processing query: {query}")
+            logging.warning("Missing 'query' parameter in request")
+            return jsonify({"error": "Missing 'query' parameter"}), 400
+            
+        # Verify required files exist
+        required_files = ["faiss_index.bin", "chunked_texts.pkl"]
+        for file in required_files:
+            if not os.path.exists(file):
+                error_msg = f"Required file {file} not found"
+                logging.error(error_msg)
+                return jsonify({"error": error_msg}), 500
+                
+        # Process query
         logging.info(f"Processing query: {query}")
         answer = rag_pipeline.get_answer(query)
-        print(f"Generated answer: {answer}")
         logging.info(f"Generated answer: {answer}")
 
-        # Lưu lịch sử
-        with open(history_file, "r+") as f:
-            history = json.load(f)
-            history.append({"user": query, "bot": answer})
-            if len(history) > MAX_HISTORY_LENGTH:
-                history = history[-MAX_HISTORY_LENGTH:]
-            f.seek(0)
-            json.dump(history, f, ensure_ascii=False, indent=4)
-        print("History updated successfully.")
-        logging.info("History updated successfully.")
-
+        # Update history
+        try:
+            with open(history_file, "r+") as f:
+                history = json.load(f)
+                history.append({"user": query, "bot": answer})
+                if len(history) > MAX_HISTORY_LENGTH:
+                    history = history[-MAX_HISTORY_LENGTH:]
+                f.seek(0)
+                f.truncate()
+                json.dump(history, f, ensure_ascii=False, indent=4)
+            logging.info("History updated successfully")
+        except Exception as e:
+            logging.error(f"Error updating history: {e}")
+            # Continue even if history update fails
+            
         return jsonify({"query": query, "answer": answer})
-    except FileNotFoundError as e:
-        print(f"File error: {e}")
-        logging.error(f"File error: {e}")
-        return jsonify({"error": str(e)}), 500
+        
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        logging.error(f"Unexpected error: {e}")
-        # Trả về thông báo lỗi chi tiết trong môi trường phát triển
+        logging.error(f"Unexpected error: {str(e)}", exc_info=True)
         return jsonify({"error": f"Unexpected error occurred: {str(e)}"}), 500
 # Chạy ứng dụng Flask
 if __name__ == '__main__':
