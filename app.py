@@ -205,11 +205,6 @@ def answer():
 
 # Chạy ứng dụng Flask
 if __name__ == '__main__':
-    try:
-        port = int(os.getenv("PORT", 10000))
-        print(f"Starting Flask app on http://127.0.0.1:{port}")
-        logging.info(f"Starting Flask app on http://127.0.0.1:{port}")
-        app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False)
-    except Exception as e:
-        logging.error(f"Failed to start Flask app: {e}")
-        print(f"Failed to start Flask app: {e}")
+    port = int(os.getenv("PORT", 5000))  # Lấy cổng từ biến môi trường hoặc mặc định là 5000
+    app.run(host='0.0.0.0', port=port, debug=False)
+
