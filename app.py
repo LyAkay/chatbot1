@@ -73,7 +73,7 @@ class ModelManager:
                 model="gpt-4o-mini",  # Sử dụng mô hình GPT-4o-mini như yêu cầu
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=500
+                max_tokens=500,
                 request_timeout=30
             )
             answer = response.choices[0].message["content"]
