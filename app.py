@@ -123,7 +123,7 @@ Câu hỏi: {question}
             logging.info(f"Fetching embedding for query: {query}")
             response = openai.Embedding.create(
                 input=query,
-                model="text-embedding-3-larger"  # Sử dụng mô hình embedding yêu cầu
+                model="text-embedding-3-large"  # Sử dụng mô hình embedding yêu cầu
             )
             embedding = np.array(response["data"][0]["embedding"], dtype="float32")
             logging.info(f"Received embedding: {embedding[:5]}...")  # Log phần đầu embedding
