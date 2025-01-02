@@ -202,7 +202,6 @@ def answer():
         logging.error(f"Unexpected error: {e}")
         # Trả về thông báo lỗi chi tiết trong môi trường phát triển
         return jsonify({"error": f"Unexpected error occurred: {str(e)}"}), 500
-
 # Chạy ứng dụng Flask
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))  # Lấy cổng từ biến môi trường hoặc mặc định là 5000
