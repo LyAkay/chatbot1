@@ -8,7 +8,7 @@ import faiss
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 
-# Cấu hình logging với mã hóa UTF-8
+# Cấu hình logging
 log_dir = "logs"
 log_file = os.path.join(log_dir, "rag_pipeline.log")
 os.makedirs(log_dir, exist_ok=True)
@@ -16,8 +16,7 @@ os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     filename=log_file,
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding='utf-8'  # Thêm tham số encoding
+    format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # Tạo thư mục cache và history
@@ -26,20 +25,18 @@ history_file = "history/chat_history.json"
 os.makedirs("cache", exist_ok=True)
 os.makedirs("history", exist_ok=True)
 
-# Đảm bảo file cache và history có mã hóa đúng
+# Đảm bảo file cache và history tồn tại
 if not os.path.exists(cache_file):
-    with open(cache_file, "w", encoding="utf-8") as f:
+    with open(cache_file, "w") as f:
         json.dump({}, f, ensure_ascii=False, indent=4)
 
 if not os.path.exists(history_file):
-    with open(history_file, "w", encoding="utf-8") as f:
+    with open(history_file, "w") as f:
         json.dump([], f, ensure_ascii=False, indent=4)
 
 # Tải API Key từ .env
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
-print(f"OPENAI_API_KEY: {openai.api_key}")  # Kiểm tra API Key
-
 # Khởi tạo Flask app
 app = Flask(__name__)
 
@@ -53,12 +50,12 @@ class ModelManager:
 
     def load_cache(self):
         """Load cache từ file."""
-        with open(cache_file, "r", encoding="utf-8") as f:
+        with open(cache_file, "r") as f:
             return json.load(f)
 
     def save_cache(self):
         """Lưu cache vào file."""
-        with open(cache_file, "w", encoding="utf-8") as f:
+        with open(cache_file, "w") as f:
             json.dump(self.cache, f, ensure_ascii=False, indent=4)
 
     def call_openai_model(self, prompt: str) -> str:
@@ -183,7 +180,7 @@ def answer():
         logging.info(f"Generated answer: {answer}")
 
         # Lưu lịch sử
-        with open(history_file, "r+", encoding="utf-8") as f:
+        with open(history_file, "r+") as f:
             history = json.load(f)
             history.append({"user": query, "bot": answer})
             if len(history) > MAX_HISTORY_LENGTH:
@@ -207,4 +204,3 @@ def answer():
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))  # Lấy cổng từ biến môi trường hoặc mặc định là 5000
     app.run(host='0.0.0.0', port=port, debug=False)
-
