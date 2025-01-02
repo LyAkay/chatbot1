@@ -74,6 +74,7 @@ class ModelManager:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 max_tokens=500
+                request_timeout=30
             )
             answer = response.choices[0].message["content"]
             self.cache[prompt] = answer
